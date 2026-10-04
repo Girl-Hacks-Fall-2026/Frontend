@@ -719,7 +719,7 @@ export default function App() {
 
       {(scene === "garden" || scene === "forest") && (
         <button
-          style={{ position: 'absolute', top: '12px', left: '18px' }}
+          style={{ position: 'absolute', top: '12px', left: '18px', zIndex: 20 }}
           className='overlayButton'
           onClick={() => setScene('lobby')}
         >
