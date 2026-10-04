@@ -6,10 +6,46 @@ import skyboxPath from './assets/skybox.glb'
 import lobbyPath from './assets/world.glb'
 import { cameraPosition } from 'three/tsl'
 import * as THREE from 'three'
+import './App.css'
 
 function Model({ path, ...props }) {
   const gltf = useGLTF(path)
   return <primitive {...props} object={gltf.scene} />
+}
+
+function ClickArea({ position, widthPercent, heightPercent, onClick }) {
+  const { camera, size } = useThree()
+
+  const distance = camera.position.distanceTo(
+    new THREE.Vector3(...position)
+  )
+
+  const vFov = THREE.MathUtils.degToRad(camera.fov)
+
+  const height =
+    2 * Math.tan(vFov / 2) * distance
+
+  const width =
+    height * camera.aspect
+
+  return (
+    <mesh
+      position={position}
+      onClick={onClick}
+    >
+      <planeGeometry
+        args={[
+          width * widthPercent,
+          height * heightPercent
+        ]}
+      />
+
+      <meshBasicMaterial
+        transparent
+        opacity={0}
+      />
+    </mesh>
+  )
 }
 
 function Lobby({ scene, setScene })
@@ -44,6 +80,8 @@ function Lobby({ scene, setScene })
 
       camera.updateMatrixWorld()
       console.log("Swapped to Lobby")
+
+      
     }
   }, [GLTFScene, camera]);
 
@@ -51,7 +89,7 @@ function Lobby({ scene, setScene })
     console.log(scene)
     if (scene === "search")
     {
-      camera.position.lerp(Player.scene.position.clone().add(new THREE.Vector3(0, 4, -10)), 0.01);
+      camera.position.lerp(Player.scene.position.clone().add(new THREE.Vector3(0, 4, -10)), 0.03);
       camera.lookAt(Player.scene.position.clone().add(new THREE.Vector3(0,3,3)));
     }
     else
@@ -149,8 +187,21 @@ export default function App() {
   const [scene, setScene] = useState("lobby");
 
   return (
-    <>
-    <Canvas>
+
+    <div
+      style={{
+          position: "relative",
+          width: "100vw",
+          height: "100vh",
+      }}>
+
+    <Canvas
+        style={{
+          width: "100%",
+          height: "100%",
+        }}
+      >
+
       { (scene === "lobby" || scene === "search") && (
         <Lobby scene={scene} setScene={setScene} />
       )}
@@ -162,9 +213,22 @@ export default function App() {
       { (scene === "forest") && (
         <Forest setScene={setScene} />
       )}
-      <ambientLight intensity={1.5}></ambientLight>
+      <ambientLight intensity={2}></ambientLight>
     </Canvas>
-   
-    </>
+
+    {scene === "lobby" && (
+        <>
+          <button style={{top:"83%", left:"20%"}} className='overlayButton' onClick={() => setScene("garden")}>
+            Garden
+          </button>
+          <button style={{top:"37%", left:"55%"}} className='overlayButton' onClick={() => setScene("search")}>
+            Forest
+          </button>
+        </>
+      )}
+
+    
+
+    </div>
   )
 }
