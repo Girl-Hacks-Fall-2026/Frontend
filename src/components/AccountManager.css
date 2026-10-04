@@ -51,9 +51,10 @@
   pointer-events: auto;
 }
 
-.account-email {
+.account-username {
   color: var(--text-h);
   font-size: 13px;
+  font-weight: 700;
 }
 
 .account-button {
@@ -238,7 +239,7 @@
     gap: 6px;
   }
 
-  .account-controls .account-email {
+  .account-controls .account-username {
     display: none;
   }
 

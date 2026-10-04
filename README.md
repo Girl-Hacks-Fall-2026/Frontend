@@ -13,6 +13,8 @@ The app uses Supabase Auth for email/password sign-in, account creation, session
 
 The Supabase Edge Function uses the project's server-side `SUPABASE_SERVICE_ROLE_KEY` secret to delete only the user identified by the verified bearer session. Do not expose this secret to the frontend.
 
+For password recovery, add the frontend's local and deployed URLs to the Supabase Auth redirect URL allow list. The reset email redirects back to the current frontend origin.
+
 ## Checks
 
 - `npm run lint`
