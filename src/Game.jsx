@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState, useRef } from 'react'
+import { Suspense, useEffect, useState, useRef, useMemo } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { useGLTF } from '@react-three/drei'
 import pixiePath from './assets/Pixie.glb'
@@ -11,6 +11,7 @@ import dummyImage from './dummy.png'
 import { cameraPosition } from 'three/tsl'
 import * as THREE from 'three'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
+import { supabase } from './lib/supabase'
 import './App.css'
 import { plane } from 'three/examples/jsm/Addons.js'
 
@@ -22,8 +23,8 @@ const POST_HEIGHT = 420
 const POST_GAP = 56
 const POST_SPACING = POST_WIDTH + POST_GAP
 
-const FOLIAGE_SPACING_PX = 140   // roughly one piece of foliage per this many scrolled pixels
-const FOLIAGE_MARGIN_PX = 3000   // extra foliage before the first and after the last post
+const FOLIAGE_SPACING_PX = 20   // roughly one piece of foliage per this many scrolled pixels
+const FOLIAGE_MARGIN_PX = 300   // extra foliage before the first and after the last post
 const HOP_HEIGHT = 0.6
 const HOP_PER_PIXEL = Math.PI / 120 // one hop every ~120px scrolled
 
@@ -50,6 +51,15 @@ const posts = [
   { id: 5, user: "thistledown", image: dummyImage, text: "The fox is back on the ridge. Stay on the lit trail tonight." },
   { id: 6, user: "hollow_log", image: dummyImage, text: "Moved my nest two branches up. Great view of the sunrise." }
 ]
+
+function mapDbPost(row) {
+  return {
+    id: row.post_id,
+    user: row.creator_id ? row.creator_id.slice(0, 16) : 'forest_friend',
+    image: row.image_url || dummyImage,
+    text: row.text || '',
+  }
+}
 
 function Model({ path, ...props }) {
   const gltf = useGLTF(path)
@@ -314,16 +324,20 @@ function Garden({ setScene }) {
   )
 }
 
-function Forest({ scrollTarget, postsRef, setScene })
+function Forest({ scrollTarget, postsRef, setScene, posts })
 {
   const { camera, size } = useThree();
 
   const Player = useGLTF(pixiePath)
   const TreeModel = useGLTF(treePath)
   const FlowerModel = useGLTF(flowerPath)
-  const foliageModels = [TreeModel, FlowerModel]
+  const foliageModels = useMemo(() => [TreeModel, FlowerModel], [TreeModel, FlowerModel])
 
-  const [foliage] = useState(() => spawnFoliage(foliageModels, (posts.length - 1) * POST_SPACING))
+  const [foliage, setFoliage] = useState(() => spawnFoliage(foliageModels, (posts.length - 1) * POST_SPACING))
+
+  useEffect(() => {
+    setFoliage(spawnFoliage(foliageModels, (posts.length - 1) * POST_SPACING))
+  }, [posts.length, foliageModels])
 
   const scrollCurrent = useRef(0);
   const hopPhase = useRef(0);
@@ -480,6 +494,95 @@ export default function App() {
   }, [scene])
 
   useEffect(() => {
+    if (!supabase) return undefined
+
+    let mounted = true
+
+    async function loadPosts() {
+      const { data, error } = await supabase
+        .from('Post')
+        .select('post_id, creator_id, text, image_url, forest_id, date_created')
+        .order('date_created', { ascending: false })
+
+      if (!mounted) return
+
+      if (error) {
+        console.error('Unable to load posts from Post table:', error)
+        setPosts(DEFAULT_POSTS)
+        return
+      }
+
+      if (!data || data.length === 0) {
+        try {
+          let { data: forestData, error: forestError } = await supabase
+            .from('Forest')
+            .select('forest_id')
+            .limit(1)
+
+          if (forestError) throw forestError
+
+          let forestId = forestData?.[0]?.forest_id
+
+          if (forestId == null) {
+            const { data: insertedForest, error: createForestError } = await supabase
+              .from('Forest')
+              .insert({
+                forest_name: 'Starter Forest',
+                description: 'Seeded community forest',
+                date_created: new Date().toISOString(),
+              })
+              .select('forest_id')
+              .maybeSingle()
+
+            if (createForestError) throw createForestError
+            forestId = insertedForest?.forest_id
+          }
+
+          if (forestId == null) {
+            throw new Error('No forest record available for seeded posts.')
+          }
+
+          const now = new Date().toISOString()
+          const seedRows = DEFAULT_POSTS.map((post) => ({
+            forest_id: forestId,
+            text: post.text,
+            image_url: null,
+            date_created: now,
+            creator_id: null,
+          }))
+
+          const { error: insertError } = await supabase
+            .from('Post')
+            .insert(seedRows)
+
+          if (insertError) throw insertError
+
+          const { data: seededPosts, error: seededError } = await supabase
+            .from('Post')
+            .select('post_id, creator_id, text, image_url, forest_id, date_created')
+            .order('date_created', { ascending: false })
+
+          if (seededError) throw seededError
+          setPosts((seededPosts || []).map(mapDbPost))
+          return
+        } catch (seedError) {
+          console.error('Unable to seed Post table from fallback posts:', seedError)
+          setPosts(DEFAULT_POSTS)
+          return
+        }
+      }
+
+      setPosts(data.map(mapDbPost))
+    }
+
+    loadPosts()
+
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (scene !== "forest") return
 
     scrollTarget.current = 0
@@ -532,7 +635,7 @@ export default function App() {
       )}
 
       { (scene === "forest") && (
-        <Forest scrollTarget={scrollTarget} postsRef={postsRef} setScene={setScene} />
+        <Forest scrollTarget={scrollTarget} postsRef={postsRef} setScene={setScene} posts={posts} />
       )}
       <ambientLight intensity={2}></ambientLight>
     </Canvas>

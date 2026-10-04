@@ -14,7 +14,6 @@ export default function AccountManager() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [username, setUsername] = useState('')
   const [accountUsername, setAccountUsername] = useState('')
-  const [phone, setPhone] = useState('')
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -57,7 +56,7 @@ export default function AccountManager() {
 
     let mounted = true
     supabase
-      .from('profiles')
+      .from('User_Profile')
       .select('username')
       .eq('user_id', session.user.id)
       .maybeSingle()
@@ -73,14 +72,14 @@ export default function AccountManager() {
           return
         }
 
-        const initialUsername = signupUsername?.trim().toLowerCase()
+        const initialUsername = signupUsername?.trim()
         if (!initialUsername) {
           setAccountUsername('')
           return
         }
 
         const { error: insertError } = await supabase
-          .from('profiles')
+          .from('User_Profile')
           .insert({ user_id: session.user.id, username: initialUsername })
         if (!mounted) return
         if (insertError?.code === '23505') {
@@ -139,7 +138,10 @@ export default function AccountManager() {
         : await supabase.auth.signUp({
             email,
             password,
-            options: { data: { username: username.trim().toLowerCase() } },
+            options: {
+              emailRedirectTo: window.location.origin,
+              data: { username: username.trim() },
+            },
           })
 
       if (result.error) throw result.error
@@ -179,13 +181,12 @@ export default function AccountManager() {
 
     try {
       const { data, error: profileError } = await supabase
-        .from('profiles')
-        .select('username, phone_number')
+        .from('User_Profile')
+        .select('username')
         .eq('user_id', session.user.id)
         .maybeSingle()
       if (profileError) throw profileError
       setUsername(data?.username || '')
-      setPhone(data?.phone_number || '')
     } catch (settingsError) {
       setError(settingsError instanceof Error ? settingsError.message : 'Unable to load account settings.')
     } finally {
@@ -193,16 +194,18 @@ export default function AccountManager() {
     }
   }
 
-  async function saveProfileField(field, value, successMessage) {
+  async function saveUsername(event) {
+    event.preventDefault()
     if (!supabase || !session) return
 
+    const value = username.trim()
     setBusy(true)
     setError('')
     setMessage('')
     try {
       const { data, error: updateError } = await supabase
-        .from('profiles')
-        .update({ [field]: value })
+        .from('User_Profile')
+        .update({ username: value })
         .eq('user_id', session.user.id)
         .select('user_id')
         .maybeSingle()
@@ -212,40 +215,30 @@ export default function AccountManager() {
 
       if (!data) {
         const { error: insertError } = await supabase
-          .from('profiles')
-          .insert({ user_id: session.user.id, [field]: value })
+          .from('User_Profile')
+          .insert({ user_id: session.user.id, username: value })
 
-        if (insertError?.code === '23505' && field === 'username') {
+        if (insertError?.code === '23505') {
           throw new Error('That username is already taken.')
         }
         if (insertError) throw insertError
       }
 
-      if (field === 'username') setAccountUsername(value || '')
-      setMessage(successMessage)
+      setAccountUsername(value)
+      setMessage('Username updated.')
     } catch (updateError) {
       const detail =
         updateError instanceof Error
           ? updateError.message
-          : updateError?.message || `Unable to update ${field}.`
-      if (detail.includes('profiles') || detail.includes('phone_number')) {
-        setError(`${detail} Make sure the Supabase profile migrations have been applied from the backend repo.`)
+          : updateError?.message || 'Unable to update username.'
+      if (detail.includes('User_Profile') || detail.includes('username')) {
+        setError(`${detail} Check that User_Profile is exposed in the Supabase API and your user can update their own row.`)
       } else {
         setError(detail)
       }
     } finally {
       setBusy(false)
     }
-  }
-
-  async function saveUsername(event) {
-    event.preventDefault()
-    await saveProfileField('username', username.trim().toLowerCase(), 'Username updated.')
-  }
-
-  async function savePhoneNumber(event) {
-    event.preventDefault()
-    await saveProfileField('phone_number', phone.trim() || null, 'Phone number saved.')
   }
 
   async function savePassword(event) {
@@ -372,7 +365,7 @@ export default function AccountManager() {
               {authMode === 'sign-up' && (
                 <label>
                   Username
-                  <span className="field-hint">Unique, lowercase; 3–24 letters, numbers, or underscores.</span>
+                  <span className="field-hint">3–24 letters, numbers, or underscores. Capitalization is preserved.</span>
                   <input
                     autoComplete="username"
                     maxLength={24}
@@ -460,18 +453,10 @@ export default function AccountManager() {
                 <form className="account-form settings-section" onSubmit={saveUsername}>
                   <label>
                     Username
-                    <span className="field-hint">Unique, lowercase; 3–24 letters, numbers, or underscores.</span>
+                    <span className="field-hint">3–24 letters, numbers, or underscores. Capitalization is preserved.</span>
                     <input autoComplete="username" maxLength={24} minLength={3} onChange={(event) => setUsername(event.target.value)} pattern="[a-zA-Z0-9_]{3,24}" required value={username} />
                   </label>
                   <button className="account-button submit" disabled={busy} type="submit">Save username</button>
-                </form>
-                <form className="account-form settings-section" onSubmit={savePhoneNumber}>
-                  <label>
-                    Phone number
-                    <span className="field-hint">Stored privately in your profile; verification is not required.</span>
-                    <input autoComplete="tel" onChange={(event) => setPhone(event.target.value)} type="tel" value={phone} />
-                  </label>
-                  <button className="account-button submit" disabled={busy} type="submit">Save phone number</button>
                 </form>
                 <form className="account-form settings-section" onSubmit={savePassword}>
                   <label>
