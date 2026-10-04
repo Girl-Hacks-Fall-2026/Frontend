@@ -795,6 +795,13 @@ export default function App() {
 
     {scene === "forest" && (
         <>
+          <button
+            className="overlayButton"
+            style={{ position: 'absolute', top: '80px', right: '18px', left: "auto", zIndex: 20}}
+            onClick={() => console.log("Create Post clicked")}
+          >
+            Create Post
+          </button>
           <div
             ref={postsRef}
             style={{
