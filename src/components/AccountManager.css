@@ -1,0 +1,253 @@
+.account-manager {
+  position: absolute;
+  z-index: 5;
+  inset: 0 0 auto;
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 12px 18px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+.account-manager button,
+.account-manager input {
+  font: inherit;
+}
+
+.account-manager button {
+  pointer-events: auto;
+}
+
+.account-notices {
+  margin-right: auto;
+}
+
+.account-status,
+.account-error,
+.account-message {
+  margin: 0;
+  font-size: 13px;
+}
+
+.account-status {
+  color: var(--text);
+}
+
+.account-error {
+  color: #b42336;
+}
+
+.account-message {
+  color: #34734a;
+}
+
+.account-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.account-email {
+  color: var(--text-h);
+  font-size: 13px;
+}
+
+.account-button {
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 7px;
+  color: #fff;
+  background: var(--accent);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.account-button:hover:not(:disabled) {
+  filter: brightness(0.94);
+}
+
+.account-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.account-button.secondary {
+  color: var(--text-h);
+  background: var(--social-bg);
+}
+
+.account-backdrop {
+  position: fixed;
+  z-index: 10;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(12, 10, 18, 0.52);
+  pointer-events: auto;
+}
+
+.account-dialog {
+  position: relative;
+  width: min(400px, 100%);
+  max-height: min(90svh, 900px);
+  overflow-y: auto;
+  padding: 30px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--bg);
+  box-shadow: var(--shadow);
+  text-align: left;
+}
+
+.settings-dialog {
+  width: min(500px, 100%);
+}
+
+.account-dialog h1 {
+  margin: 0 36px 22px 0;
+  color: var(--text-h);
+  font-size: 28px;
+  letter-spacing: -0.5px;
+}
+
+.account-close {
+  position: absolute;
+  top: 15px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text);
+  background: transparent;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.account-form {
+  display: grid;
+  gap: 14px;
+}
+
+.account-form label,
+.delete-section label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-h);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.account-form input,
+.delete-section input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 11px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-h);
+  background: var(--bg);
+}
+
+.account-form input:focus,
+.delete-section input:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-bg);
+}
+
+.account-button.submit {
+  margin-top: 3px;
+}
+
+.account-switch {
+  margin: 18px 0 0;
+  color: var(--text);
+  font-size: 13px;
+  text-align: center;
+}
+
+.account-link {
+  padding: 0;
+  border: 0;
+  color: var(--accent) !important;
+  background: transparent !important;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.settings-content {
+  display: grid;
+  gap: 17px;
+}
+
+.settings-section {
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.field-hint {
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.delete-section {
+  display: grid;
+  gap: 10px;
+  padding: 15px;
+  border: 1px solid rgba(180, 35, 54, 0.25);
+  border-radius: 8px;
+  background: rgba(180, 35, 54, 0.04);
+}
+
+.delete-section h2 {
+  margin: 0;
+  color: #b42336;
+  font-size: 16px;
+}
+
+.delete-section p {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.delete-section label {
+  font-size: 12px;
+}
+
+.account-button.delete-button {
+  background: #b42336;
+}
+
+.account-button.delete-button:disabled {
+  filter: grayscale(0.6);
+}
+
+@media (max-width: 600px) {
+  .account-manager {
+    padding: 10px;
+  }
+
+  .account-controls {
+    gap: 6px;
+  }
+
+  .account-controls .account-email {
+    display: none;
+  }
+
+  .account-button {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .account-dialog {
+    padding: 24px;
+  }
+}

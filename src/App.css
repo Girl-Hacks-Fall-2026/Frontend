@@ -1,3 +1,13 @@
 .overlayButton {
   position: absolute;
 }
+.app-shell {
+  position: relative;
+  min-height: 100svh;
+  overflow: hidden;
+}
+
+.game-app {
+  position: absolute;
+  inset: 0;
+}
