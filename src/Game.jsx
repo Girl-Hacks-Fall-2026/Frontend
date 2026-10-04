@@ -454,6 +454,8 @@ export default function App() {
   const [expandedPost, setExpandedPost] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchReady, setSearchReady] = useState(true);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [feedMessage, setFeedMessage] = useState("");
 
   const randomQueries = [
     'mossy trail',
@@ -466,23 +468,70 @@ export default function App() {
 
   const scrollTarget = useRef(0);
   const postsRef = useRef(null);
+  const postsRequestRef = useRef(0);
 
-  const handleSearchSubmit = () => {
+  const handleSearchSubmit = async (event) => {
+    event.preventDefault()
     const trimmed = searchQuery.trim();
     if (!trimmed) {
-      console.log('Search submitted with empty query')
+      setFeedMessage('Enter a forest name to search.')
       return
     }
 
-    const submitSearchQuery = async (query) => {
-      // TODO: replace this placeholder with the real search request
-      console.log('TODO: submit search query to backend:', query)
-      return query
+    if (!supabase) {
+      setPosts([])
+      setFeedMessage('Forest search is unavailable because Supabase is not configured.')
+      setScene('forest')
+      return
     }
 
-    submitSearchQuery(trimmed)
-    setScene('forest')
-    console.log('Search submitted:', trimmed)
+    const requestId = ++postsRequestRef.current
+    setSearchLoading(true)
+    setFeedMessage('')
+    setPosts([])
+
+    try {
+      const { data: forests, error: forestError } = await supabase
+        .from('Forest')
+        .select('forest_id')
+        .eq('forest_name', trimmed)
+
+      if (forestError) throw forestError
+      if (requestId !== postsRequestRef.current) return
+
+      if (!forests || forests.length === 0) {
+        setFeedMessage(`No forest found named "${trimmed}".`)
+        setScene('forest')
+        return
+      }
+
+      const forestIds = forests.map((forest) => forest.forest_id)
+      const { data, error: postError } = await supabase
+        .from('Post')
+        .select('post_id, creator_id, text, image_url, forest_id, date_created')
+        .in('forest_id', forestIds)
+        .order('date_created', { ascending: false })
+
+      if (postError) throw postError
+      if (requestId !== postsRequestRef.current) return
+
+      const matchingPosts = (data || []).map(mapDbPost)
+      setPosts(matchingPosts)
+      setFeedMessage(
+        matchingPosts.length > 0
+          ? ''
+          : `No posts found in "${trimmed}".`
+      )
+      setScene('forest')
+    } catch (error) {
+      if (requestId !== postsRequestRef.current) return
+      console.error('Unable to search forests:', error)
+      setPosts([])
+      setFeedMessage(`Unable to search forests: ${error.message || 'Unknown error.'}`)
+      setScene('forest')
+    } finally {
+      if (requestId === postsRequestRef.current) setSearchLoading(false)
+    }
   }
 
   const handleRandomSearch = () => {
@@ -500,6 +549,7 @@ export default function App() {
     if (!supabase) return undefined
 
     let mounted = true
+    const requestId = ++postsRequestRef.current
 
     async function loadPosts() {
       const { data, error } = await supabase
@@ -507,7 +557,7 @@ export default function App() {
         .select('post_id, creator_id, text, image_url, forest_id, date_created')
         .order('date_created', { ascending: false })
 
-      if (!mounted) return
+      if (!mounted || requestId !== postsRequestRef.current) return
 
       if (error) {
         console.error('Unable to load posts from Post table:', error)
@@ -522,6 +572,7 @@ export default function App() {
             .select('forest_id')
             .limit(1)
 
+          if (!mounted || requestId !== postsRequestRef.current) return
           if (forestError) throw forestError
 
           let forestId = forestData?.[0]?.forest_id
@@ -537,6 +588,7 @@ export default function App() {
               .select('forest_id')
               .maybeSingle()
 
+            if (!mounted || requestId !== postsRequestRef.current) return
             if (createForestError) throw createForestError
             forestId = insertedForest?.forest_id
           }
@@ -558,6 +610,7 @@ export default function App() {
             .from('Post')
             .insert(seedRows)
 
+          if (!mounted || requestId !== postsRequestRef.current) return
           if (insertError) throw insertError
 
           const { data: seededPosts, error: seededError } = await supabase
@@ -565,6 +618,7 @@ export default function App() {
             .select('post_id, creator_id, text, image_url, forest_id, date_created')
             .order('date_created', { ascending: false })
 
+          if (!mounted || requestId !== postsRequestRef.current) return
           if (seededError) throw seededError
           setPosts((seededPosts || []).map(mapDbPost))
           return
@@ -665,7 +719,8 @@ export default function App() {
       )}
 
       {scene === "search" && (
-        <div
+        <form
+          onSubmit={handleSearchSubmit}
           style={{
             position: 'absolute',
             top: '12%',
@@ -688,7 +743,8 @@ export default function App() {
             type="text"
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Search the forest..."
+            placeholder="Enter a forest name..."
+            disabled={searchLoading}
             style={{
               width: '100%',
               boxSizing: 'border-box',
@@ -703,21 +759,29 @@ export default function App() {
 
           <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
             <button
+              type="submit"
               className='overlayButton'
-              onClick={handleSearchSubmit}
+              disabled={searchLoading}
               style={{ position: 'relative', top: 'auto', left: 'auto', flex: 1 }}
             >
-              Submit Search
+              {searchLoading ? 'Searching...' : 'Submit Search'}
             </button>
             <button
+              type="button"
               className='overlayButton'
               onClick={handleRandomSearch}
+              disabled={searchLoading}
               style={{ position: 'relative', top: 'auto', left: 'auto', flex: 1 }}
             >
               Random Query
             </button>
           </div>
-        </div>
+          {feedMessage && (
+            <p role="status" style={{ margin: 0, color: '#f1f5eb', textAlign: 'center' }}>
+              {feedMessage}
+            </p>
+          )}
+        </form>
       )}
 
     {scene === "forest" && (
@@ -734,6 +798,23 @@ export default function App() {
               pointerEvents: "none",
               willChange: "transform",
             }}>
+            {posts.length === 0 && feedMessage && (
+              <p
+                role="status"
+                style={{
+                  margin: '20vh auto 0',
+                  padding: '16px 22px',
+                  borderRadius: 14,
+                  background: 'rgba(24, 44, 32, 0.9)',
+                  color: '#e4efd9',
+                  fontSize: 18,
+                  textAlign: 'center',
+                  pointerEvents: 'auto',
+                }}
+              >
+                {feedMessage}
+              </p>
+            )}
             {posts.map((post) => {
               const title = post.text.length > 70 ? `${post.text.slice(0, 70).trim()}…` : post.text
               const previewText = post.text.length > 120 ? `${post.text.slice(0, 120).trim()}…` : post.text
