@@ -452,6 +452,7 @@ export default function App() {
 
   const [scene, setScene] = useState("forest");
   const [posts, setPosts] = useState(DEFAULT_POSTS);
+  const [creatingPost, setCreatingPost] = useState(false);
   const [expandedPost, setExpandedPost] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchReady, setSearchReady] = useState(true);
@@ -798,10 +799,93 @@ export default function App() {
           <button
             className="overlayButton"
             style={{ position: 'absolute', top: '80px', right: '18px', left: "auto", zIndex: 20}}
-            onClick={() => console.log("Create Post clicked")}
+            onClick={() => setCreatingPost(true)}
           >
             Create Post
           </button>
+
+          {creatingPost && (
+            <div
+              onClick={() => setCreatingPost(false)}
+              style={{
+                position: "fixed",
+                inset: 0,
+                background: "rgba(18, 20, 20, 0.52)",
+                backdropFilter: "blur(5px)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                zIndex: 50,
+                padding: 24,
+              }}
+            >
+              <div
+                onClick={(event) => event.stopPropagation()}
+                style={{
+                  width: "min(500px, 100%)",
+                  background: "#f5efe7",
+                  border: "2px solid #d7d0c6",
+                  borderRadius: 20,
+                  padding: 24,
+                  color: "#2d2a28",
+                  boxShadow: "0 20px 50px rgba(0, 0, 0, 0.3)",
+                }}
+              >
+                <h2 style={{ marginTop: 0 }}>
+                  Create Post
+                </h2>
+
+                <textarea
+                  placeholder="What would you like to share?"
+                  style={{
+                    width: "100%",
+                    minHeight: 140,
+                    boxSizing: "border-box",
+                    resize: "vertical",
+                    padding: 12,
+                    borderRadius: 10,
+                    border: "1px solid #b8a89a",
+                    fontSize: 16,
+                  }}
+                />
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    marginTop: 18,
+                  }}
+                >
+                  <button
+                    className="overlayButton"
+                    style={{
+                      position: "relative",
+                      top: "auto",
+                      left: "auto",
+                      flex: 1,
+                    }}
+                    onClick={() => console.log("Post submitted")}
+                  >
+                    Post
+                  </button>
+
+                  <button
+                    className="overlayButton"
+                    style={{
+                      position: "relative",
+                      top: "auto",
+                      left: "auto",
+                      flex: 1,
+                    }}
+                    onClick={() => setCreatingPost(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div
             ref={postsRef}
             style={{
