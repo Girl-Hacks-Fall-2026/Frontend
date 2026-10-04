@@ -1,16 +1,19 @@
-# React + Vite
+# Whimsy frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The app uses Supabase Auth for email/password sign-in, account creation, session persistence, and account settings. Display names are stored in Auth user metadata. Usernames are unique lowercase handles and phone numbers are private profile fields in `public.profiles`.
 
-Currently, two official plugins are available:
+## Local setup
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Install dependencies with `npm install`.
+2. Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in a local `.env` file. Never put a service-role key in a `VITE_` variable.
+3. Initialize and link the Supabase CLI if needed: `npx supabase init`, `npx supabase login`, then `npx supabase link --project-ref <project-ref>`.
+4. Apply the Supabase migrations from the backend repo.
+5. Deploy the delete-account Edge Function from the backend repo.
+6. Run `npm run dev`.
 
-## React Compiler
+The Supabase Edge Function uses the project's server-side `SUPABASE_SERVICE_ROLE_KEY` secret to delete only the user identified by the verified bearer session. Do not expose this secret to the frontend.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Checks
 
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+- `npm run lint`
+- `npm run build`
