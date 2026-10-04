@@ -1,6 +1,6 @@
 # Whimsy frontend
 
-The app uses Supabase Auth for email/password sign-in, account creation, session persistence, and account settings. Display names are stored in Auth user metadata. Usernames are unique lowercase handles and phone numbers are private profile fields in `public.profiles`.
+The app uses Supabase Auth for email/password sign-in, account creation, session persistence, and account settings. Usernames are unique lowercase handles and phone numbers are private profile fields in `public.profiles`.
 
 ## Local setup
 
@@ -12,6 +12,8 @@ The app uses Supabase Auth for email/password sign-in, account creation, session
 6. Run `npm run dev`.
 
 The Supabase Edge Function uses the project's server-side `SUPABASE_SERVICE_ROLE_KEY` secret to delete only the user identified by the verified bearer session. Do not expose this secret to the frontend.
+
+For password recovery, add the frontend's local and deployed URLs to the Supabase Auth redirect URL allow list. The reset email redirects back to the current frontend origin.
 
 ## Checks
 

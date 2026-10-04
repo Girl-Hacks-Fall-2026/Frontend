@@ -12,14 +12,15 @@ export default function AccountManager() {
   const [password, setPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
+  const [accountUsername, setAccountUsername] = useState('')
   const [phone, setPhone] = useState('')
   const [deleteConfirmation, setDeleteConfirmation] = useState('')
   const [settingsLoading, setSettingsLoading] = useState(false)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const signupUsername = session?.user.user_metadata?.username
 
   useEffect(() => {
     if (!supabase) return undefined
@@ -32,9 +33,17 @@ export default function AccountManager() {
       setAuthLoading(false)
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
       setSession(nextSession)
       setAuthLoading(false)
+      if (event === 'PASSWORD_RECOVERY') {
+        setAuthMode('reset-password')
+        setAuthOpen(true)
+        setNewPassword('')
+        setConfirmPassword('')
+        setMessage('')
+        setError('')
+      }
     })
 
     return () => {
@@ -42,6 +51,59 @@ export default function AccountManager() {
       subscription.unsubscribe()
     }
   }, [])
+
+  useEffect(() => {
+    if (!supabase || !session?.user.id) return undefined
+
+    let mounted = true
+    supabase
+      .from('profiles')
+      .select('username')
+      .eq('user_id', session.user.id)
+      .maybeSingle()
+      .then(async ({ data, error: profileError }) => {
+        if (!mounted) return
+        if (profileError) {
+          setError(`Unable to load username: ${profileError.message}`)
+          return
+        }
+
+        if (data?.username) {
+          setAccountUsername(data.username)
+          return
+        }
+
+        const initialUsername = signupUsername?.trim().toLowerCase()
+        if (!initialUsername) {
+          setAccountUsername('')
+          return
+        }
+
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({ user_id: session.user.id, username: initialUsername })
+        if (!mounted) return
+        if (insertError?.code === '23505') {
+          setError('That username is already taken. Choose another in Account settings.')
+          setAccountUsername('')
+          return
+        }
+        if (insertError) {
+          setError(`Unable to save username: ${insertError.message}`)
+          return
+        }
+        setAccountUsername(initialUsername)
+      })
+      .catch((profileError) => {
+        if (mounted) {
+          setError(profileError instanceof Error ? profileError.message : 'Unable to load username.')
+        }
+      })
+
+    return () => {
+      mounted = false
+    }
+  }, [session?.user.id, signupUsername])
 
   async function handleAuthSubmit(event) {
     event.preventDefault()
@@ -51,14 +113,34 @@ export default function AccountManager() {
     setError('')
     setMessage('')
     try {
-      const result =
-        authMode === 'sign-in'
-          ? await supabase.auth.signInWithPassword({ email, password })
-          : await supabase.auth.signUp({
-              email,
-              password,
-              options: { data: { display_name: displayName.trim() } },
-            })
+      if (authMode === 'forgot-password') {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: window.location.origin,
+        })
+        if (resetError) throw resetError
+        setMessage('If an account exists for that email, a password reset link has been sent.')
+        return
+      }
+
+      if (authMode === 'reset-password') {
+        if (newPassword !== confirmPassword) throw new Error('The new passwords do not match.')
+        const { error: updateError } = await supabase.auth.updateUser({ password: newPassword })
+        if (updateError) throw updateError
+        setPassword('')
+        setNewPassword('')
+        setConfirmPassword('')
+        setAuthOpen(false)
+        setMessage('Password updated. You can sign in with your new password.')
+        return
+      }
+
+      const result = authMode === 'sign-in'
+        ? await supabase.auth.signInWithPassword({ email, password })
+        : await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { username: username.trim().toLowerCase() } },
+          })
 
       if (result.error) throw result.error
       if (result.data.session) {
@@ -91,7 +173,6 @@ export default function AccountManager() {
 
     setError('')
     setMessage('')
-    setDisplayName(session.user.user_metadata?.display_name || '')
     setDeleteConfirmation('')
     setSettingsLoading(true)
     setSettingsOpen(true)
@@ -112,26 +193,6 @@ export default function AccountManager() {
     }
   }
 
-  async function saveDisplayName(event) {
-    event.preventDefault()
-    if (!supabase) return
-
-    setBusy(true)
-    setError('')
-    setMessage('')
-    try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        data: { display_name: displayName.trim() },
-      })
-      if (updateError) throw updateError
-      setMessage('Display name updated.')
-    } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : 'Unable to update display name.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   async function saveProfileField(field, value, successMessage) {
     if (!supabase || !session) return
 
@@ -139,14 +200,39 @@ export default function AccountManager() {
     setError('')
     setMessage('')
     try {
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from('profiles')
-        .upsert({ user_id: session.user.id, [field]: value }, { onConflict: 'user_id' })
+        .update({ [field]: value })
+        .eq('user_id', session.user.id)
+        .select('user_id')
+        .maybeSingle()
+
       if (updateError?.code === '23505') throw new Error('That username is already taken.')
       if (updateError) throw updateError
+
+      if (!data) {
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({ user_id: session.user.id, [field]: value })
+
+        if (insertError?.code === '23505' && field === 'username') {
+          throw new Error('That username is already taken.')
+        }
+        if (insertError) throw insertError
+      }
+
+      if (field === 'username') setAccountUsername(value || '')
       setMessage(successMessage)
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : `Unable to update ${field}.`)
+      const detail =
+        updateError instanceof Error
+          ? updateError.message
+          : updateError?.message || `Unable to update ${field}.`
+      if (detail.includes('profiles') || detail.includes('phone_number')) {
+        setError(`${detail} Make sure the Supabase profile migrations have been applied from the backend repo.`)
+      } else {
+        setError(detail)
+      }
     } finally {
       setBusy(false)
     }
@@ -196,17 +282,41 @@ export default function AccountManager() {
       const { error: deleteError } = await supabase.functions.invoke('delete-account', {
         method: 'POST',
       })
-      if (deleteError) throw deleteError
+      if (deleteError) {
+        const details = await readFunctionError(deleteError)
+        throw new Error(details || deleteError.message)
+      }
 
-      const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' })
-      if (signOutError) throw signOutError
       setSettingsOpen(false)
       setMessage('Account deleted.')
+      try {
+        const { error: signOutError } = await supabase.auth.signOut({ scope: 'local' })
+        if (signOutError) setError(`Account deleted, but local sign-out failed: ${signOutError.message}`)
+      } catch (signOutError) {
+        setError(
+          `Account deleted, but local sign-out failed: ${
+            signOutError instanceof Error ? signOutError.message : 'Unknown error.'
+          }`,
+        )
+      }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : 'Unable to delete the account.')
     } finally {
       setBusy(false)
     }
+  }
+
+  async function readFunctionError(functionError) {
+    if (functionError.context instanceof Response) {
+      try {
+        const body = await functionError.context.clone().json()
+        if (typeof body.error === 'string') return body.error
+        if (typeof body.message === 'string') return body.message
+      } catch {
+        return functionError.message
+      }
+    }
+    return functionError.message
   }
 
   function openAuth(mode = 'sign-in') {
@@ -229,7 +339,9 @@ export default function AccountManager() {
         <p className="account-status" role="status">Checking session…</p>
       ) : session ? (
         <div className="account-controls">
-          <span className="account-email">{session.user.email}</span>
+          <span className="account-username" title={session.user.email}>
+            {accountUsername ? `@${accountUsername}` : 'Choose username'}
+          </span>
           <button className="account-button secondary" onClick={openSettings} type="button">
             Account settings
           </button>
@@ -247,38 +359,89 @@ export default function AccountManager() {
         }}>
           <section aria-labelledby="auth-title" aria-modal="true" className="account-dialog" role="dialog">
             <button aria-label="Close" className="account-close" onClick={() => setAuthOpen(false)} type="button">×</button>
-            <h1 id="auth-title">{authMode === 'sign-in' ? 'Sign in' : 'Create account'}</h1>
+            <h1 id="auth-title">
+              {authMode === 'sign-in'
+                ? 'Sign in'
+                : authMode === 'sign-up'
+                  ? 'Create account'
+                  : authMode === 'forgot-password'
+                    ? 'Reset your password'
+                    : 'Choose a new password'}
+            </h1>
             <form className="account-form" onSubmit={handleAuthSubmit}>
               {authMode === 'sign-up' && (
                 <label>
-                  Display name
-                  <input autoComplete="nickname" maxLength={40} onChange={(event) => setDisplayName(event.target.value)} required value={displayName} />
+                  Username
+                  <span className="field-hint">Unique, lowercase; 3–24 letters, numbers, or underscores.</span>
+                  <input
+                    autoComplete="username"
+                    maxLength={24}
+                    minLength={3}
+                    onChange={(event) => setUsername(event.target.value)}
+                    pattern="[a-zA-Z0-9_]{3,24}"
+                    required
+                    value={username}
+                  />
                 </label>
               )}
-              <label>
+              {authMode !== 'reset-password' && <label>
                 Email
                 <input autoComplete="email" onChange={(event) => setEmail(event.target.value)} required type="email" value={email} />
-              </label>
-              <label>
-                Password
-                <input autoComplete={authMode === 'sign-in' ? 'current-password' : 'new-password'} minLength={6} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
-              </label>
+              </label>}
+              {authMode === 'sign-in' || authMode === 'sign-up' ? (
+                <label>
+                  Password
+                  <input autoComplete={authMode === 'sign-in' ? 'current-password' : 'new-password'} minLength={6} onChange={(event) => setPassword(event.target.value)} required type="password" value={password} />
+                </label>
+              ) : authMode === 'reset-password' ? (
+                <>
+                  <label>
+                    New password
+                    <input autoComplete="new-password" minLength={6} onChange={(event) => setNewPassword(event.target.value)} required type="password" value={newPassword} />
+                  </label>
+                  <label>
+                    Confirm new password
+                    <input autoComplete="new-password" minLength={6} onChange={(event) => setConfirmPassword(event.target.value)} required type="password" value={confirmPassword} />
+                  </label>
+                </>
+              ) : null}
               {error && <p aria-live="polite" className="account-error">{error}</p>}
               {message && <p aria-live="polite" className="account-message">{message}</p>}
               <button className="account-button submit" disabled={busy} type="submit">
-                {busy ? 'Please wait…' : authMode === 'sign-in' ? 'Sign in' : 'Create account'}
+                {busy ? 'Please wait…' : authMode === 'sign-in' ? 'Sign in' : authMode === 'sign-up' ? 'Create account' : authMode === 'forgot-password' ? 'Send reset link' : 'Update password'}
               </button>
             </form>
-            <p className="account-switch">
-              {authMode === 'sign-in' ? 'New here?' : 'Already have an account?'}{' '}
-              <button className="account-link" onClick={() => {
-                setAuthMode(authMode === 'sign-in' ? 'sign-up' : 'sign-in')
-                setError('')
-                setMessage('')
-              }} type="button">
-                {authMode === 'sign-in' ? 'Create an account' : 'Sign in'}
-              </button>
-            </p>
+            {authMode === 'sign-in' && (
+              <p className="account-switch">
+                <button className="account-link" onClick={() => {
+                  setAuthMode('forgot-password')
+                  setMessage('')
+                  setError('')
+                }} type="button">Forgot password?</button>
+              </p>
+            )}
+            {(authMode === 'sign-in' || authMode === 'sign-up') && (
+              <p className="account-switch">
+                {authMode === 'sign-in' ? 'New here?' : 'Already have an account?'}{' '}
+                <button className="account-link" onClick={() => {
+                  setAuthMode(authMode === 'sign-in' ? 'sign-up' : 'sign-in')
+                  setError('')
+                  setMessage('')
+                }} type="button">
+                  {authMode === 'sign-in' ? 'Create an account' : 'Sign in'}
+                </button>
+              </p>
+            )}
+            {authMode === 'forgot-password' && (
+              <p className="account-switch">
+                Remembered it?{' '}
+                <button className="account-link" onClick={() => {
+                  setAuthMode('sign-in')
+                  setError('')
+                  setMessage('')
+                }} type="button">Back to sign in</button>
+              </p>
+            )}
           </section>
         </div>
       )}
@@ -294,13 +457,6 @@ export default function AccountManager() {
               <p className="account-status" role="status">Loading account…</p>
             ) : (
               <div className="settings-content">
-                <form className="account-form settings-section" onSubmit={saveDisplayName}>
-                  <label>
-                    Display name
-                    <input autoComplete="nickname" maxLength={40} onChange={(event) => setDisplayName(event.target.value)} required value={displayName} />
-                  </label>
-                  <button className="account-button submit" disabled={busy} type="submit">Save display name</button>
-                </form>
                 <form className="account-form settings-section" onSubmit={saveUsername}>
                   <label>
                     Username
