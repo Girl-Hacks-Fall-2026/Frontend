@@ -12,7 +12,6 @@ export default function AccountManager() {
   const [password, setPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [displayName, setDisplayName] = useState('')
   const [username, setUsername] = useState('')
   const [accountUsername, setAccountUsername] = useState('')
   const [phone, setPhone] = useState('')
@@ -21,6 +20,7 @@ export default function AccountManager() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const signupUsername = session?.user.user_metadata?.username
 
   useEffect(() => {
     if (!supabase) return undefined
@@ -61,13 +61,38 @@ export default function AccountManager() {
       .select('username')
       .eq('user_id', session.user.id)
       .maybeSingle()
-      .then(({ data, error: profileError }) => {
+      .then(async ({ data, error: profileError }) => {
         if (!mounted) return
         if (profileError) {
           setError(`Unable to load username: ${profileError.message}`)
           return
         }
-        setAccountUsername(data?.username || '')
+
+        if (data?.username) {
+          setAccountUsername(data.username)
+          return
+        }
+
+        const initialUsername = signupUsername?.trim().toLowerCase()
+        if (!initialUsername) {
+          setAccountUsername('')
+          return
+        }
+
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({ user_id: session.user.id, username: initialUsername })
+        if (!mounted) return
+        if (insertError?.code === '23505') {
+          setError('That username is already taken. Choose another in Account settings.')
+          setAccountUsername('')
+          return
+        }
+        if (insertError) {
+          setError(`Unable to save username: ${insertError.message}`)
+          return
+        }
+        setAccountUsername(initialUsername)
       })
       .catch((profileError) => {
         if (mounted) {
@@ -78,7 +103,7 @@ export default function AccountManager() {
     return () => {
       mounted = false
     }
-  }, [session?.user.id])
+  }, [session?.user.id, signupUsername])
 
   async function handleAuthSubmit(event) {
     event.preventDefault()
@@ -114,7 +139,7 @@ export default function AccountManager() {
         : await supabase.auth.signUp({
             email,
             password,
-            options: { data: { display_name: displayName.trim() } },
+            options: { data: { username: username.trim().toLowerCase() } },
           })
 
       if (result.error) throw result.error
@@ -148,7 +173,6 @@ export default function AccountManager() {
 
     setError('')
     setMessage('')
-    setDisplayName(session.user.user_metadata?.display_name || '')
     setDeleteConfirmation('')
     setSettingsLoading(true)
     setSettingsOpen(true)
@@ -169,26 +193,6 @@ export default function AccountManager() {
     }
   }
 
-  async function saveDisplayName(event) {
-    event.preventDefault()
-    if (!supabase) return
-
-    setBusy(true)
-    setError('')
-    setMessage('')
-    try {
-      const { error: updateError } = await supabase.auth.updateUser({
-        data: { display_name: displayName.trim() },
-      })
-      if (updateError) throw updateError
-      setMessage('Display name updated.')
-    } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : 'Unable to update display name.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   async function saveProfileField(field, value, successMessage) {
     if (!supabase || !session) return
 
@@ -196,15 +200,39 @@ export default function AccountManager() {
     setError('')
     setMessage('')
     try {
-      const { error: updateError } = await supabase
+      const { data, error: updateError } = await supabase
         .from('profiles')
-        .upsert({ user_id: session.user.id, [field]: value }, { onConflict: 'user_id' })
+        .update({ [field]: value })
+        .eq('user_id', session.user.id)
+        .select('user_id')
+        .maybeSingle()
+
       if (updateError?.code === '23505') throw new Error('That username is already taken.')
       if (updateError) throw updateError
+
+      if (!data) {
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({ user_id: session.user.id, [field]: value })
+
+        if (insertError?.code === '23505' && field === 'username') {
+          throw new Error('That username is already taken.')
+        }
+        if (insertError) throw insertError
+      }
+
       if (field === 'username') setAccountUsername(value || '')
       setMessage(successMessage)
     } catch (updateError) {
-      setError(updateError instanceof Error ? updateError.message : `Unable to update ${field}.`)
+      const detail =
+        updateError instanceof Error
+          ? updateError.message
+          : updateError?.message || `Unable to update ${field}.`
+      if (detail.includes('profiles') || detail.includes('phone_number')) {
+        setError(`${detail} Make sure the Supabase profile migrations have been applied from the backend repo.`)
+      } else {
+        setError(detail)
+      }
     } finally {
       setBusy(false)
     }
@@ -343,8 +371,17 @@ export default function AccountManager() {
             <form className="account-form" onSubmit={handleAuthSubmit}>
               {authMode === 'sign-up' && (
                 <label>
-                  Display name
-                  <input autoComplete="nickname" maxLength={40} onChange={(event) => setDisplayName(event.target.value)} required value={displayName} />
+                  Username
+                  <span className="field-hint">Unique, lowercase; 3–24 letters, numbers, or underscores.</span>
+                  <input
+                    autoComplete="username"
+                    maxLength={24}
+                    minLength={3}
+                    onChange={(event) => setUsername(event.target.value)}
+                    pattern="[a-zA-Z0-9_]{3,24}"
+                    required
+                    value={username}
+                  />
                 </label>
               )}
               {authMode !== 'reset-password' && <label>
@@ -420,13 +457,6 @@ export default function AccountManager() {
               <p className="account-status" role="status">Loading account…</p>
             ) : (
               <div className="settings-content">
-                <form className="account-form settings-section" onSubmit={saveDisplayName}>
-                  <label>
-                    Display name
-                    <input autoComplete="nickname" maxLength={40} onChange={(event) => setDisplayName(event.target.value)} required value={displayName} />
-                  </label>
-                  <button className="account-button submit" disabled={busy} type="submit">Save display name</button>
-                </form>
                 <form className="account-form settings-section" onSubmit={saveUsername}>
                   <label>
                     Username

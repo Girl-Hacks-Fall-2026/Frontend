@@ -1,6 +1,6 @@
 # Whimsy frontend
 
-The app uses Supabase Auth for email/password sign-in, account creation, session persistence, and account settings. Display names are stored in Auth user metadata. Usernames are unique lowercase handles and phone numbers are private profile fields in `public.profiles`.
+The app uses Supabase Auth for email/password sign-in, account creation, session persistence, and account settings. Usernames are unique lowercase handles and phone numbers are private profile fields in `public.profiles`.
 
 ## Local setup
 
