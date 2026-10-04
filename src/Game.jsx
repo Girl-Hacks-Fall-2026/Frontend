@@ -14,6 +14,7 @@ import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { supabase } from './lib/supabase'
 import './App.css'
 import { plane } from 'three/examples/jsm/Addons.js'
+import starrySky from './assets/starrysky.jpg'
 
 const foliagePaths = [treePath, flowerPath]
 
@@ -673,7 +674,15 @@ export default function App() {
   }, [scene]);
 
   return (
-    <main className="game-app">
+    <main
+      className="game-app"
+      style={{
+        backgroundImage: `url(${starrySky})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
 
     <Canvas
         style={{
