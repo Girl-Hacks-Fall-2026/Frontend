@@ -52,6 +52,7 @@ const posts = [
   { id: 5, user: "thistledown", image: dummyImage, text: "The fox is back on the ridge. Stay on the lit trail tonight." },
   { id: 6, user: "hollow_log", image: dummyImage, text: "Moved my nest two branches up. Great view of the sunrise." }
 ]
+const DEFAULT_POSTS = posts
 
 function mapDbPost(row) {
   return {
@@ -449,7 +450,9 @@ function spawnFoliage(models, totalPx)
 
 export default function App() {
 
-  const [scene, setScene] = useState("lobby");
+  const [scene, setScene] = useState("forest");
+  const [posts, setPosts] = useState(DEFAULT_POSTS);
+  const [expandedPost, setExpandedPost] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchReady, setSearchReady] = useState(true);
 
@@ -460,7 +463,7 @@ export default function App() {
     'fox path at dusk',
     'sunset glade',
     'wildflower clearing'
-  ]
+  ];
 
   const scrollTarget = useRef(0);
   const postsRef = useRef(null);
@@ -740,43 +743,179 @@ export default function App() {
               pointerEvents: "none",
               willChange: "transform",
             }}>
-            {posts.map((post) => (
+            {posts.map((post) => {
+              const title = post.text.length > 70 ? `${post.text.slice(0, 70).trim()}…` : post.text
+              const previewText = post.text.length > 120 ? `${post.text.slice(0, 120).trim()}…` : post.text
+              const showReadMore = post.text.length > 120
+              const likeCount = (post.id * 7 + 19) % 30 + 13
+              const commentCount = (post.id * 5 + 23) % 24 + 8
+
+              return (
+                <div
+                  key={post.id}
+                  className='overlayPost'
+                  style={{
+                    width: 300,
+                    height: 400,
+                    flexShrink: 0,
+                    boxSizing: "border-box",
+                    borderRadius: 18,
+                    border: "2px solid #d7d0c6",
+                    background: "#f5efe7",
+                    color: "#2d2a28",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    pointerEvents: "auto",
+                    boxShadow: "0 10px 30px rgba(34, 28, 24, 0.15)",
+                  }}>
+                  <div style={{ height: "48%", background: "#d8d0c8", overflow: "hidden", flexShrink: 0 }}>
+                    <img
+                      src={post.image}
+                      alt={post.user}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                        display: "block",
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ padding: "12px 14px 8px", display: "flex", flexDirection: "column", gap: 8, flex: 1, minHeight: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 19, lineHeight: 1.15, color: "#2a2624", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{title}</div>
+
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                      <div style={{ fontSize: 16, color: "#4c4a46" }}>
+                        by: <span style={{ fontWeight: 700 }}>{post.user}</span>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: 16, color: "#4c4a46", fontSize: 15, fontWeight: 700 }}>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <span aria-hidden="true" style={{ color: '#e38b8b', fontSize: 18 }}>♥</span>
+                          {likeCount}
+                        </span>
+                        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <span aria-hidden="true" style={{ color: '#6a6a6a', fontSize: 17 }}>◌</span>
+                          {commentCount}
+                        </span>
+                      </div>
+                    </div>
+
+                    <p style={{
+                      margin: 0,
+                      color: "#4b473f",
+                      fontSize: 14,
+                      lineHeight: 1.35,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 3,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                    }}>{previewText}</p>
+                  </div>
+
+                  {showReadMore && (
+                    <button
+                      type="button"
+                      onClick={() => setExpandedPost(post)}
+                      style={{
+                        marginTop: 0,
+                        border: 'none',
+                        background: '#9ad7d4',
+                        color: '#1a2f2d',
+                        fontSize: 18,
+                        fontWeight: 800,
+                        padding: '12px 16px',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 10,
+                        width: '100%',
+                      }}
+                    >
+                      <span>Read More</span>
+                      <span aria-hidden="true" style={{ fontSize: 18 }}>☰</span>
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {expandedPost && (
+            <div
+              onClick={() => setExpandedPost(null)}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(18, 20, 20, 0.52)',
+                backdropFilter: 'blur(5px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 50,
+                padding: 24,
+              }}
+            >
               <div
-                key={post.id}
-                className='overlayPost'
+                onClick={(event) => event.stopPropagation()}
                 style={{
-                  width: POST_WIDTH,
-                  height: POST_HEIGHT,
-                  flexShrink: 0,
-                  boxSizing: "border-box",
-                  borderRadius: 14,
-                  border: "2px solid #7a5a32",
-                  background: "rgba(24, 44, 32, 0.75)",
-                  color: "#e4efd9",
-                  backdropFilter: "blur(6px)",
-                  overflow: "hidden",
-                  display: "flex",
-                  flexDirection: "column",
-                }}>
-                <div style={{ height: "58%", background: "#1d2d22", overflow: "hidden" }}>
+                  width: 'min(600px, 100%)',
+                  maxHeight: '80vh',
+                  overflowY: 'auto',
+                  background: '#f5efe7',
+                  border: '2px solid #d7d0c6',
+                  borderRadius: 20,
+                  color: '#2d2a28',
+                  boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
+                  overflow: 'hidden',
+                }}
+              >
+                <div style={{ height: 280, background: '#d8d0c8' }}>
                   <img
-                    src={post.image}
-                    alt={post.user}
-                    style={{
-                      width: "100%",
-                      height: "100%",
-                      objectFit: "cover",
-                      display: "block",
-                    }}
+                    src={expandedPost.image}
+                    alt={expandedPost.user}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                   />
                 </div>
-                <div style={{ padding: 16, display: "flex", flexDirection: "column", justifyContent: "center", flex: 1 }}>
-                  <strong style={{ display: "block", marginBottom: 8 }}>{post.user}</strong>
-                  <p style={{ margin: 0, lineHeight: 1.45 }}>{post.text}</p>
+
+                <div style={{ padding: 22 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                    <div style={{ fontWeight: 800, fontSize: 30, lineHeight: 1.1 }}>{expandedPost.text.length > 70 ? `${expandedPost.text.slice(0, 70).trim()}…` : expandedPost.text}</div>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedPost(null)}
+                      style={{
+                        background: 'transparent',
+                        border: '1px solid #b8a89a',
+                        color: '#382f2b',
+                        borderRadius: 999,
+                        width: 34,
+                        height: 34,
+                        cursor: 'pointer',
+                        fontSize: 22,
+                        lineHeight: 1,
+                      }}
+                      aria-label="Close post"
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 18, color: '#4c4a46', fontSize: 16 }}>
+                    <span>by: <strong>{expandedPost.user}</strong></span>
+                    <div style={{ display: 'flex', gap: 18 }}>
+                      <span>♥ {(expandedPost.id * 7 + 19) % 30 + 13}</span>
+                      <span>◌ {(expandedPost.id * 5 + 23) % 24 + 8}</span>
+                    </div>
+                  </div>
+
+                  <p style={{ margin: 0, lineHeight: 1.7, color: '#403d3a', whiteSpace: 'pre-wrap', fontSize: 18 }}>{expandedPost.text}</p>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </>
       )}
 
