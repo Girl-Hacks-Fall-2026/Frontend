@@ -51,6 +51,7 @@ const posts = [
   { id: 5, user: "thistledown", image: dummyImage, text: "The fox is back on the ridge. Stay on the lit trail tonight." },
   { id: 6, user: "hollow_log", image: dummyImage, text: "Moved my nest two branches up. Great view of the sunrise." }
 ]
+const DEFAULT_POSTS = posts
 
 function mapDbPost(row) {
   return {
@@ -776,17 +777,17 @@ export default function App() {
                     <div style={{ fontWeight: 800, fontSize: 19, lineHeight: 1.15, color: "#2a2624", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{title}</div>
 
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-                      <div style={{ fontSize: 13, color: "#4c4a46" }}>
+                      <div style={{ fontSize: 16, color: "#4c4a46" }}>
                         by: <span style={{ fontWeight: 700 }}>{post.user}</span>
                       </div>
 
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#4c4a46", fontSize: 12, fontWeight: 700 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 16, color: "#4c4a46", fontSize: 15, fontWeight: 700 }}>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          <span aria-hidden="true" style={{ color: '#e38b8b', fontSize: 15 }}>♥</span>
+                          <span aria-hidden="true" style={{ color: '#e38b8b', fontSize: 18 }}>♥</span>
                           {likeCount}
                         </span>
                         <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                          <span aria-hidden="true" style={{ color: '#6a6a6a', fontSize: 15 }}>◌</span>
+                          <span aria-hidden="true" style={{ color: '#6a6a6a', fontSize: 17 }}>◌</span>
                           {commentCount}
                         </span>
                       </div>
