@@ -5,12 +5,15 @@ import pixiePath from './assets/Pixie.glb'
 import lobbyPath from './assets/world.glb'
 import treePath from './assets/Tree.glb'
 import flowerPath from './assets/Flower.glb'
+import grassPath from './assets/grass.glb'
+import gardenPath from './assets/garden.glb'
 import dummyImage from './dummy.png'
 import { cameraPosition } from 'three/tsl'
 import * as THREE from 'three'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { supabase } from './lib/supabase'
 import './App.css'
+import { plane } from 'three/examples/jsm/Addons.js'
 
 const foliagePaths = [treePath, flowerPath]
 
@@ -20,15 +23,27 @@ const POST_HEIGHT = 420
 const POST_GAP = 56
 const POST_SPACING = POST_WIDTH + POST_GAP
 
-const FOLIAGE_SPACING_PX = 140   // roughly one piece of foliage per this many scrolled pixels
-const FOLIAGE_MARGIN_PX = 3000   // extra foliage before the first and after the last post
+const FOLIAGE_SPACING_PX = 20   // roughly one piece of foliage per this many scrolled pixels
+const FOLIAGE_MARGIN_PX = 300   // extra foliage before the first and after the last post
 const HOP_HEIGHT = 0.6
 const HOP_PER_PIXEL = Math.PI / 120 // one hop every ~120px scrolled
 
 const FOREST_CAMERA_POSITION = [0, 2.5, 18]
 const FOREST_CAMERA_TARGET = [0, 5, -8]
 
-const DEFAULT_POSTS = [
+// Garden configuration - set these to your provided model paths
+// Replace the defaults below with your real garden world and grass blade model paths
+const GARDEN_WORLD_PATH = gardenPath
+const GRASS_BLADE_PATH = grassPath
+
+// Garden placement radii (editable)
+const GARDEN_INNER_RADIUS = 1
+const GARDEN_OUTER_RADIUS = 5
+const GRASS_DENSITY = 120 // total blades (roughly)
+const FLOWER_PADDING = 0.5
+
+// TODO: replace with real posts
+const posts = [
   { id: 1, user: "mossy_fern", image: dummyImage, text: "Found a clearing full of fireflies behind the old oak." },
   { id: 2, user: "acorn_pip", image: dummyImage, text: "Anyone else hear the stream getting louder after the rain?" },
   { id: 3, user: "bramble", image: dummyImage, text: "Mushroom ring by the south path. Do not step in it." },
@@ -86,7 +101,18 @@ function ClickArea({ position, widthPercent, heightPercent, onClick }) {
   )
 }
 
-function Lobby({ scene, setScene })
+function setSceneVisibility(target, visible) {
+  if (!target) return
+
+  target.visible = visible
+  target.traverse((child) => {
+    if (child.isMesh || child.isSkinnedMesh || child.isObject3D) {
+      child.visible = visible
+    }
+  })
+}
+
+function Lobby({ scene, setScene, onSearchReady })
 {
   let GLTFScene = useGLTF(lobbyPath)
   const { camera } = useThree();
@@ -94,9 +120,20 @@ function Lobby({ scene, setScene })
   let Player = useGLTF(pixiePath)
   Player.scene.rotation.y = Math.PI;
   Player.scene.position.set(-2,0,-10)
+  // ensure player is visible in search/lobby views
+  if (Player && Player.scene) 
+    {
+      setSceneVisibility(Player.scene, true)
+      Player.scene.scale.setScalar(1.0)
+    }
+
+  useEffect(() => {
+    if (GLTFScene?.scene) setSceneVisibility(GLTFScene.scene, true)
+  }, [GLTFScene])
 
   const cameraDefaultPosition = useRef(new THREE.Vector3());
   const cameraDefaultQuaternion = useRef(new THREE.Quaternion());
+  const readyRef = useRef(false);
 
   useEffect(() => { 
 
@@ -124,14 +161,27 @@ function Lobby({ scene, setScene })
   }, [GLTFScene, camera]);
 
   useFrame(() => {
-    console.log(scene)
+    setSceneVisibility(Player.scene, true)
     if (scene === "search")
     {
-      camera.position.lerp(Player.scene.position.clone().add(new THREE.Vector3(0, 4, -10)), 0.03);
-      camera.lookAt(Player.scene.position.clone().add(new THREE.Vector3(0,3,3)));
+      const targetPosition = Player.scene.position.clone().add(new THREE.Vector3(0, 3, 3));
+      const cameraTarget = Player.scene.position.clone().add(new THREE.Vector3(0, 4, -10));
+      const distanceToTarget = camera.position.distanceTo(targetPosition);
+      const completionThreshold = 12;
+      const nextReady = distanceToTarget <= completionThreshold;
+
+      if (readyRef.current !== nextReady) {
+        readyRef.current = nextReady;
+        onSearchReady?.(nextReady);
+      }
+
+      camera.position.lerp(cameraTarget, 0.03);
+      camera.lookAt(targetPosition);
     }
     else
     {
+      readyRef.current = false;
+      onSearchReady?.(false);
       camera.position.lerp(cameraDefaultPosition.current, 0.01);
       camera.quaternion.slerp(cameraDefaultQuaternion.current, 0.01);
     }
@@ -143,46 +193,135 @@ function Lobby({ scene, setScene })
   </>
 }
 
-function Garden({ setScene })
-{
-  /*
-  //TODO
-  let GLTFScene = useGLTF(scenePath)
-  const { camera } = useThree();
+function Garden({ setScene }) {
+  // TODO: replace these network/query stubs with real API calls
+  function fetchFriends() {
+    // TODO: fetch friends list from backend
+    // returns number of friends; placeholder random between 6 and 14
+    return Math.floor(6 + Math.random() * 9)
+  }
 
-  useEffect(() => { 
+  function fetchLikesForFriend(friendId) {
+    // TODO: fetch likes for a particular friend
+    // placeholder random between 0 and 20
+    return Math.floor(Math.random() * 20)
+  }
 
-    if (GLTFScene.cameras && GLTFScene.cameras.length > 0) {
-      const loadedCamera = GLTFScene.cameras[0];
-      camera.position.copy(loadedCamera.position)
-      camera.quaternion.copy(loadedCamera.quaternion)
+  const { camera, size } = useThree()
 
-      if (loadedCamera.isPerspectiveCamera && camera.isPerspectiveCamera) {
-        camera.fov = loadedCamera.fov
-        camera.near = loadedCamera.near
-        camera.far = loadedCamera.far
-        camera.updateProjectionMatrix()
-      }
+  // load models (use provided paths at top; they default to existing assets)
+  const World = useGLTF(GARDEN_WORLD_PATH)
+  const BladeModel = useGLTF(GRASS_BLADE_PATH)
+  const FlowerModel = useGLTF(flowerPath)
+  const Player = useGLTF(pixiePath)
 
-      camera.updateMatrixWorld()
-      console.log("Swapping to Garden")
+  // player at center
+  useEffect(() => {
+    if (World?.scene) setSceneVisibility(World.scene, true)
+    if (BladeModel?.scene) setSceneVisibility(BladeModel.scene, true)
+    if (FlowerModel?.scene) setSceneVisibility(FlowerModel.scene, true)
+    if (Player?.scene) {
+      setSceneVisibility(Player.scene, true)
+      Player.scene.position.set(0, 0, 0)
+      Player.scene.rotation.y = 0
+      Player.scene.scale.setScalar(0.5)
     }
-  }, [GLTFScene, camera]);
+    // ensure camera frames the platform and player when Garden mounts
+    try {
+      const cam = camera
+      cam.position.set(0, 3.5, 12)
+      if (cam.isPerspectiveCamera) {
+        cam.fov = 45
+        cam.near = 0.1
+        cam.far = 2000
+        cam.updateProjectionMatrix()
+      }
+      // point camera directly at the player for debugging
+      cam.lookAt(Player.scene.position)
+      console.log('Garden camera positioned', cam.position.toArray(), '->', Player.scene.position.toArray())
+      cam.updateMatrixWorld()
+    } catch (e) {
+      // ignore if camera not available yet
+    }
+  }, [Player, camera, World, BladeModel, FlowerModel])
+
+  useFrame(() => {
+    if (Player?.scene) setSceneVisibility(Player.scene, true)
+    if (World?.scene) setSceneVisibility(World.scene, true)
+  })
+
+  // spawn items
+  const [flowers, setFlowers] = useState([])
+  const [blades, setBlades] = useState([])
+
+  useEffect(() => {
+    const friendCount = fetchFriends()
+    const newFlowers = []
+
+    for (let i = 0; i < friendCount; i++) {
+      const angle = Math.random() * Math.PI * 2
+      const radius = GARDEN_INNER_RADIUS + Math.random() * (GARDEN_OUTER_RADIUS - GARDEN_INNER_RADIUS)
+      const x = Math.cos(angle) * radius
+      const z = Math.sin(angle) * radius
+      const likes = fetchLikesForFriend(i)
+      newFlowers.push({ x, z, likes, angle })
+    }
+
+    const totalBlades = Math.max(10, Math.floor(GRASS_DENSITY))
+    const newBlades = []
+    for (let i = 0; i < totalBlades; i++) {
+      const angle = Math.random() * Math.PI * 2
+      const radius = GARDEN_INNER_RADIUS + Math.random() * (GARDEN_OUTER_RADIUS - GARDEN_INNER_RADIUS)
+      const x = Math.cos(angle) * radius
+      const z = Math.sin(angle) * radius
+      const rot = (Math.random() - 0.5) * 0.5
+      newBlades.push({ x, z, rot })
+    }
+
+    setFlowers(newFlowers)
+    setBlades(newBlades)
+  }, [])
 
   useFrame((state) => {
-    let time = state.clock.getElapsedTime()
-    let deltaTime = time -= state.clock.oldTime;
-  }) 
+    const t = state.clock.getElapsedTime()
+    // subtle swaying of grass and flowers via material or simple rotation
+    // We'll update nothing structural here; individual instances can read time
+  })
 
-  return <>
-    <ClickArea
-          position={[0, 1, -2]}
-          size={[2, 2]}
-          onClick={() => setScene("search")}
+  return (
+    <>
+      {World && <primitive object={World.scene} position={[0, -0.8, 0]} />}
+
+      {/* player centered */}
+      {Player && Player.scene && <primitive object={Player.scene} />}
+
+      {/* world/platform (centered). If you provide a world model it will be used as the platform */}
+      {/* Platform rendering commented out for debugging. */}
+      {/* {World && <primitive object={World.scene} position={[0,0,0]} />} */}
+
+      {/* grass blades (use provided grass model only) */}
+      {BladeModel && BladeModel.scene && blades.map((b, i) => (
+        <primitive
+          key={`blade-${i}`}
+          object={clone(BladeModel.scene)}
+          position={[b.x, 0.12, b.z]}
+          rotation={[0, b.rot, 0]}
+          scale={[0.24, 0.24, 0.24]}
         />
-    <primitive object={GLTFScene.scene} />;
-  </>
-  */
+      ))}
+
+      {/* flowers representing friends (use provided flower model only) */}
+      {FlowerModel && FlowerModel.scene && flowers.map((f, i) => (
+        <primitive
+          key={`flower-${i}`}
+          object={clone(FlowerModel.scene)}
+          position={[f.x, 0.06, f.z]}
+          rotation={[0, f.angle, 0]}
+          scale={[0.6, 0.6, 0.6]}
+        />
+      ))}
+    </>
+  )
 }
 
 function Forest({ scrollTarget, postsRef, setScene, posts })
@@ -206,6 +345,13 @@ function Forest({ scrollTarget, postsRef, setScene, posts })
 
   useEffect(() => { 
 
+    Player.scene.visible = true
+    Player.scene.traverse((child) => {
+      if (child.isMesh || child.isSkinnedMesh || child.isObject3D) {
+        child.visible = true
+      }
+    })
+
     Player.scene.rotation.y = Math.PI / 2;
     Player.scene.position.set(0, -1.8, -10)
     Player.scene.scale.setScalar(1.5)
@@ -223,6 +369,12 @@ function Forest({ scrollTarget, postsRef, setScene, posts })
   }, [Player, camera]);
 
   useFrame(() => {
+    Player.scene.visible = true
+    Player.scene.traverse((child) => {
+      if (child.isMesh || child.isSkinnedMesh || child.isObject3D) {
+        child.visible = true
+      }
+    })
 
     // Ease towards where the wheel wants to be
     const previous = scrollCurrent.current
@@ -299,9 +451,49 @@ export default function App() {
   const [scene, setScene] = useState("forest");
   const [posts, setPosts] = useState(DEFAULT_POSTS);
   const [expandedPost, setExpandedPost] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchReady, setSearchReady] = useState(true);
+
+  const randomQueries = [
+    'mossy trail',
+    'fireflies near the oak',
+    'hidden stream',
+    'fox path at dusk',
+    'sunset glade',
+    'wildflower clearing'
+  ];
 
   const scrollTarget = useRef(0);
   const postsRef = useRef(null);
+
+  const handleSearchSubmit = () => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      console.log('Search submitted with empty query')
+      return
+    }
+
+    const submitSearchQuery = async (query) => {
+      // TODO: replace this placeholder with the real search request
+      console.log('TODO: submit search query to backend:', query)
+      return query
+    }
+
+    submitSearchQuery(trimmed)
+    setScene('forest')
+    console.log('Search submitted:', trimmed)
+  }
+
+  const handleRandomSearch = () => {
+    const entry = randomQueries[Math.floor(Math.random() * randomQueries.length)]
+    setSearchQuery(entry)
+    console.log('Random search selected:', entry)
+  }
+
+  useEffect(() => {
+    if (scene !== "search") return
+    setSearchReady(true)
+  }, [scene])
 
   useEffect(() => {
     if (!supabase) return undefined
@@ -406,9 +598,24 @@ export default function App() {
       )
     }
 
-    window.addEventListener("wheel", onWheel, { passive: true })
-    return () => window.removeEventListener("wheel", onWheel)
-  }, [scene, posts.length]);
+    const onKeyDown = (e) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      const delta = e.key === 'ArrowRight' ? 120 : -120
+      scrollTarget.current = THREE.MathUtils.clamp(
+        scrollTarget.current + delta,
+        0,
+        maxScroll
+      )
+    }
+
+    window.addEventListener('wheel', onWheel, { passive: true })
+    window.addEventListener('keydown', onKeyDown)
+
+    return () => {
+      window.removeEventListener('wheel', onWheel)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [scene]);
 
   return (
     <main className="game-app">
@@ -422,7 +629,7 @@ export default function App() {
       >
 
       { (scene === "lobby" || scene === "search") && (
-        <Lobby scene={scene} setScene={setScene} />
+        <Lobby scene={scene} setScene={setScene} onSearchReady={setSearchReady} />
       )}
 
       {scene === "garden" && (
@@ -437,7 +644,7 @@ export default function App() {
 
     {scene === "lobby" && (
         <>
-          <button style={{top:"83%", left:"20%"}} className='overlayButton' onClick={() => setScene("garden")}>
+          <button style={{top:"83%", left:"18%"}} className='overlayButton' onClick={() => setScene("garden")}>
             Garden
           </button>
           <button style={{top:"37%", left:"55%"}} className='overlayButton' onClick={() => setScene("search")}>
@@ -446,12 +653,74 @@ export default function App() {
         </>
       )}
 
+      {(scene === "garden" || scene === "forest") && (
+        <button
+          style={{ position: 'absolute', top: '12px', left: '18px' }}
+          className='overlayButton'
+          onClick={() => setScene('lobby')}
+        >
+          Home
+        </button>
+      )}
+
+      {scene === "search" && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '12%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 'min(560px, 70vw)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '12px',
+            background: 'rgba(16, 20, 18, 0.6)',
+            border: '1px solid rgba(156, 213, 173, 0.5)',
+            borderRadius: '16px',
+            padding: '18px 18px 16px',
+            boxShadow: '0 10px 35px rgba(0, 0, 0, 0.2)',
+            backdropFilter: 'blur(8px)',
+            zIndex: 10,
+          }}
+        >
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search the forest..."
+            style={{
+              width: '100%',
+              boxSizing: 'border-box',
+              borderRadius: '12px',
+              border: '1px solid #7ba37d',
+              background: 'rgba(245, 248, 243, 0.95)',
+              padding: '12px 14px',
+              fontSize: '1rem',
+              color: '#17301b',
+            }}
+          />
+
+          <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+            <button
+              className='overlayButton'
+              onClick={handleSearchSubmit}
+              style={{ position: 'relative', top: 'auto', left: 'auto', flex: 1 }}
+            >
+              Submit Search
+            </button>
+            <button
+              className='overlayButton'
+              onClick={handleRandomSearch}
+              style={{ position: 'relative', top: 'auto', left: 'auto', flex: 1 }}
+            >
+              Random Query
+            </button>
+          </div>
+        </div>
+      )}
+
     {scene === "forest" && (
         <>
-          <button style={{top:"4%", left:"3%"}} className='overlayButton' onClick={() => setScene("lobby")}>
-            Back
-          </button>
-
           <div
             ref={postsRef}
             style={{
