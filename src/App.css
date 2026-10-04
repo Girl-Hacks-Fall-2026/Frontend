@@ -1,3 +1,6 @@
+.overlayButton {
+  position: absolute;
+}
 .app-shell {
   position: relative;
   min-height: 100svh;
