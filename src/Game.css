@@ -1,0 +1,4 @@
+.game-app > div {
+  position: absolute !important;
+  inset: 0;
+}
